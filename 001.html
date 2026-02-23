@@ -6,7 +6,7 @@
             name="viewport"
             content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes"
         />
-        <title>📋 默契局</title>
+        <title>📋默契局</title>
         <!-- 使用 jsencrypt 进行 RSA 加密（分段） -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.2/jsencrypt.min.js"></script>
         <style>
@@ -61,6 +61,41 @@
                 font-size: 1rem;
                 padding: 4px 12px;
                 border-radius: 60px;
+            }
+
+            /* 开始界面 */
+            .start-area {
+                text-align: center;
+                padding: 30px 20px 40px;
+                background: rgba(255, 255, 255, 0.6);
+                border-radius: 40px;
+                margin-bottom: 20px;
+            }
+            .start-btn {
+                background: #3b6eff;
+                border: none;
+                padding: 18px 48px;
+                border-radius: 60px;
+                font-size: 1.8rem;
+                font-weight: 700;
+                color: white;
+                cursor: pointer;
+                box-shadow: 0 10px 25px rgba(59, 110, 255, 0.5);
+                transition: 0.15s;
+                border: 1px solid #8bb1ff;
+                margin: 20px 0 10px;
+            }
+            .start-btn:hover {
+                background: #2952d0;
+                transform: scale(1.02);
+            }
+            .start-info {
+                color: #2c3e50;
+                font-size: 1.2rem;
+                margin-top: 20px;
+            }
+            .start-info p {
+                margin: 8px 0;
             }
 
             /* 题号 & 导航 */
@@ -253,8 +288,27 @@
                 <span>身外青山创建</span>
             </h1>
 
-            <!-- 答题区域 (包含进度、题目、导航) 提交后将隐藏 -->
-            <div id="quizArea">
+            <!-- 开始界面 (初始显示) -->
+            <div id="startArea" class="start-area">
+                <div
+                    style="font-size: 1.8rem; font-weight: 600; color: #1e2b3c"
+                >
+                    默契局
+                </div>
+                <div
+                    style="font-size: 1.2rem; font-weight: 600; color: #d8cde4"
+                >
+                    题主评价：不觉得有人能上50%
+                </div>
+                <div class="start-info">
+                    <p>共 10 道选择题, 提交后将生成密文</p>
+                    <p>将密文提交给题主以获得答题数据</p>
+                </div>
+                <button class="start-btn" id="startBtn">开始答题</button>
+            </div>
+
+            <!-- 答题区域 (初始隐藏) -->
+            <div id="quizArea" style="display: none">
                 <!-- 进度 + 导航（下一题按钮会变提交） -->
                 <div class="progress-row">
                     <div class="badge" id="questionIndexDisplay"></div>
@@ -389,14 +443,14 @@
 
                 // ---------- 用户提供的 RSA 公钥 (PEM格式) ----------
                 const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
-            MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjNXo1pEDEgmAs3hyfyYx
-            9kYiAfEnGezC8GMqp7/I6ZQ/EODLF6yUIs9ceStq28AF/ETMkDlk54krxWTjageB
-            BJI1UpxBSWVd0J1nu1leVmg5HBtNGQnzE7Bl0jt8IbtwJpQEn1lsug147Nd4DEIT
-            npmNXh0z53h3kSDgW64/BxIyhdf/4tAwbvF8gW4rnehKzpVYdMe2+mAqXMUJUZ87
-            /FFAB0mykFfTMKTbejUc5OjkRx61fJ+sGmmK/+efGS8L3ZvvvWLTMHVKgV2ehjeN
-            m6fH9E8Xn97nqVJsLNr7mcXulib/RPKSOM//nUuL3xyULDWzjT2uc/sbHS2YsdG4
-            yQIDAQAB
-            -----END PUBLIC KEY-----`;
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjNXo1pEDEgmAs3hyfyYx
+9kYiAfEnGezC8GMqp7/I6ZQ/EODLF6yUIs9ceStq28AF/ETMkDlk54krxWTjageB
+BJI1UpxBSWVd0J1nu1leVmg5HBtNGQnzE7Bl0jt8IbtwJpQEn1lsug147Nd4DEIT
+npmNXh0z53h3kSDgW64/BxIyhdf/4tAwbvF8gW4rnehKzpVYdMe2+mAqXMUJUZ87
+/FFAB0mykFfTMKTbejUc5OjkRx61fJ+sGmmK/+efGS8L3ZvvvWLTMHVKgV2ehjeN
+m6fH9E8Xn97nqVJsLNr7mcXulib/RPKSOM//nUuL3xyULDWzjT2uc/sbHS2YsdG4
+yQIDAQAB
+-----END PUBLIC KEY-----`;
 
                 // ---------- 固定盐值 (按要求) ----------
                 const FIXED_SALT = "#@SALT_DOGEATMOON@#";
@@ -405,19 +459,15 @@
                 const MAX_SEGMENT_LENGTH = 100; // 每段明文字符数
                 const SEGMENT_DELIMITER = "||"; // 分段分隔符
 
-                // ---------- 状态 ----------
-                const totalQuestions = questions.length;
-                let currentIndex = 0;
-                // 初始化答案全部为 'A'
-                let answers = questions.map(() => "A");
-
-                // 记录开始时间 (页面加载时)
-                const startTime = Date.now();
-
-                // 行为日志数组 (存储紧凑格式字符串片段)
-                let behaviorLog = [];
+                // ---------- 状态变量 (开始后初始化) ----------
+                let totalQuestions = questions.length;
+                let currentIndex;
+                let answers;
+                let startTime;
+                let behaviorLog;
 
                 // DOM 元素
+                const startArea = document.getElementById("startArea");
                 const quizArea = document.getElementById("quizArea");
                 const questionTextEl = document.getElementById("questionText");
                 const optionsContainer =
@@ -430,6 +480,7 @@
                 const cipherCard = document.getElementById("cipherCard");
                 const cipherText = document.getElementById("cipherText");
                 const copyCipherBtn = document.getElementById("copyCipherBtn");
+                const startBtn = document.getElementById("startBtn");
 
                 // ---------- 辅助函数 ----------
                 // 记录日志 (类型: S=start, E=enter, L=select, U=submit)
@@ -474,7 +525,7 @@
                     });
                     optionsContainer.innerHTML = htmlStr;
 
-                    // 更新题号 (动态，无硬编码)
+                    // 更新题号
                     questionIndexEl.innerText = `${currentIndex + 1} / ${totalQuestions}`;
 
                     // 导航按钮状态
@@ -615,19 +666,35 @@
                     }
                 }
 
-                // ---------- 事件绑定 ----------
-                optionsContainer.addEventListener("change", handleOptionChange);
+                // ---------- 开始答题事件 ----------
+                function startQuiz() {
+                    // 初始化状态
+                    currentIndex = 0;
+                    answers = questions.map(() => "A");
+                    startTime = Date.now();
+                    behaviorLog = [];
 
+                    // 隐藏开始界面，显示答题区域
+                    startArea.style.display = "none";
+                    quizArea.style.display = "block";
+
+                    // 渲染第一题
+                    renderCurrentQuestion();
+
+                    // 记录开始事件
+                    logEvent("S", -1);
+                }
+
+                // 绑定开始按钮
+                startBtn.addEventListener("click", startQuiz);
+
+                // ---------- 事件绑定 (答题相关) ----------
+                optionsContainer.addEventListener("change", handleOptionChange);
                 prevBtn.addEventListener("click", goPrev);
                 nextBtn.addEventListener("click", handleNextOrSubmit);
-
                 copyCipherBtn.addEventListener("click", copyCipher);
 
-                // 初始化渲染
-                renderCurrentQuestion();
-
-                // 记录开始事件 (全局开始)
-                logEvent("S", -1);
+                // 注意：不再在页面加载时自动渲染题目，全部由开始按钮触发
             })();
         </script>
     </body>
