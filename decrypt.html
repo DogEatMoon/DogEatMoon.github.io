@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔓 答题密文解密 · 轨迹还原与对比</title>
+    <!-- 使用 jsencrypt 进行 RSA 解密 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.2/jsencrypt.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background: #f0f4fa;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .decrypt-card {
+            max-width: 950px;
+            width: 100%;
+            background: white;
+            border-radius: 36px;
+            box-shadow: 0 20px 40px rgba(0, 10, 30, 0.15);
+            padding: 32px;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #1e2b3c;
+            border-left: 6px solid #3b6eff;
+            padding-left: 20px;
+            margin-bottom: 28px;
+        }
+        .input-group {
+            margin-bottom: 24px;
+        }
+        label {
+            font-weight: 600;
+            color: #2c3e50;
+            display: block;
+            margin-bottom: 8px;
+            font-size: 1.1rem;
+        }
+        textarea, input {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid #d0ddee;
+            border-radius: 20px;
+            font-size: 1rem;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            background: #f9fcff;
+            transition: 0.15s;
+            resize: vertical;
+        }
+        textarea:focus, input:focus {
+            border-color: #3b6eff;
+            outline: none;
+            background: #ffffff;
+        }
+        .small-hint {
+            color: #5e7a93;
+            font-size: 0.9rem;
+            margin-top: 6px;
+        }
+        .action-btn {
+            background: #3b6eff;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 60px;
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: white;
+            cursor: pointer;
+            width: 100%;
+            transition: 0.15s;
+            border: 1px solid #8bb1ff;
+            margin: 16px 0 24px;
+        }
+        .action-btn:hover {
+            background: #2952d0;
+            transform: scale(1.01);
+        }
+        .result-box {
+            background: #1e2b3c;
+            border-radius: 28px;
+            padding: 28px;
+            color: #edf2f9;
+        }
+        .result-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .result-section {
+            background: #0f1a24;
+            border-radius: 20px;
+            padding: 18px;
+            margin-bottom: 20px;
+            border: 1px solid #314b62;
+        }
+        .result-line {
+            display: flex;
+            margin: 8px 0;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .badge {
+            background: #2b4b6e;
+            padding: 4px 14px;
+            border-radius: 60px;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .traffic-list {
+            background: #0b141e;
+            padding: 12px 18px;
+            border-radius: 16px;
+            font-family: monospace;
+            font-size: 1rem;
+            line-height: 1.8;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .traffic-item {
+            border-bottom: 1px solid #2a3e54;
+            padding: 6px 0;
+        }
+        .correct {
+            color: #a3e0a3;
+            font-weight: 700;
+        }
+        .incorrect {
+            color: #ffa3a3;
+            font-weight: 700;
+        }
+        .error-message {
+            background: #4a2a2a;
+            color: #ffc3c3;
+            padding: 18px;
+            border-radius: 20px;
+            border-left: 6px solid #ff6e6e;
+        }
+        .footer {
+            margin-top: 20px;
+            color: #5e7a93;
+            text-align: center;
+        }
+        hr {
+            border: 1px solid #2e4a62;
+            margin: 24px 0;
+        }
+        .time-stamp {
+            color: #8eb9d0;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+<div class="decrypt-card">
+    <h1>🔐 解密 & 轨迹还原</h1>
+
+    <!-- 输入区 -->
+    <div class="input-group">
+        <label>🔒 密文 (支持分段，以 || 分隔)</label>
+        <textarea id="cipherInput" rows="4" placeholder="粘贴从答题页复制的密文..."></textarea>
+    </div>
+
+    <div class="input-group">
+        <label>🗝️ RSA 私钥 (PEM 格式)</label>
+        <textarea id="privateKeyInput" rows="6" placeholder="-----BEGIN PRIVATE KEY-----
+...
+-----END PRIVATE KEY-----"></textarea>
+        <div class="small-hint">请粘贴您的私钥，含 BEGIN 和 END 行</div>
+    </div>
+
+    <div class="input-group">
+        <label>📋 预设标准答案 <span style="font-weight: normal;">(大写字母，空格分隔，例如：A B C D)</span></label>
+        <input type="text" id="standardAnswerInput" placeholder="例：A B C D" value="A B C">
+    </div>
+
+    <button class="action-btn" id="decryptBtn">🔓 解密并还原轨迹</button>
+
+    <!-- 结果显示区 -->
+    <div class="result-box" id="resultArea" style="display: none;">
+        <div class="result-title">📊 解密结果</div>
+        <div id="resultContent"></div>
+    </div>
+    <div class="footer">
+        ⚡ 固定盐值: #@SALT_DOGEATMOON@#，时间戳已自动提取。
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ---------- 配置 ----------
+        const FIXED_SALT = "#@SALT_DOGEATMOON@#";
+        const SEGMENT_DELIMITER = '||';
+
+        // DOM 元素
+        const cipherInput = document.getElementById('cipherInput');
+        const privateKeyInput = document.getElementById('privateKeyInput');
+        const standardAnswerInput = document.getElementById('standardAnswerInput');
+        const decryptBtn = document.getElementById('decryptBtn');
+        const resultArea = document.getElementById('resultArea');
+        const resultContent = document.getElementById('resultContent');
+
+        // ---------- 辅助函数 ----------
+        // 分段解密
+        function segmentDecrypt(cipherText, privateKeyPEM) {
+            const segments = cipherText.split(SEGMENT_DELIMITER);
+            const decryptor = new JSEncrypt();
+            decryptor.setPrivateKey(privateKeyPEM);
+
+            let plainText = '';
+            for (let i = 0; i < segments.length; i++) {
+                const segment = segments[i].trim();
+                if (segment === '') continue;
+                const decrypted = decryptor.decrypt(segment);
+                if (decrypted === false) {
+                    throw new Error(`解密失败: 第 ${i+1} 段无效或私钥不匹配`);
+                }
+                plainText += decrypted;
+            }
+            return plainText;
+        }
+
+        // 解析解密后的字符串，提取字段和盐/时间戳
+        function parseDecrypted(decryptedStr) {
+            // 查找盐的位置
+            const saltIndex = decryptedStr.lastIndexOf(FIXED_SALT);
+            if (saltIndex === -1) {
+                throw new Error('解密后未找到固定盐值，数据可能损坏');
+            }
+
+            // 盐之前是数据部分，盐之后是提交时间戳
+            const dataPart = decryptedStr.substring(0, saltIndex);
+            const submitTimeStr = decryptedStr.substring(saltIndex + FIXED_SALT.length);
+            const submitTime = parseInt(submitTimeStr, 10);
+            if (isNaN(submitTime)) {
+                throw new Error('提交时间戳无效');
+            }
+
+            // 解析 dataPart 中的字段 (格式: answers:...|start:...|submit:...|log:...)
+            const fields = dataPart.split('|');
+            const parsed = {
+                answers: null,
+                start: null,
+                submit: submitTime,
+                log: null
+            };
+
+            for (let field of fields) {
+                const [key, ...valueParts] = field.split(':');
+                const value = valueParts.join(':'); // 防止值中有冒号
+                if (key === 'answers') parsed.answers = value.trim();
+                else if (key === 'start') parsed.start = parseInt(value, 10);
+                else if (key === 'log') parsed.log = value.trim();
+                // 注意: 加密时可能还有submit字段，但我们已经从盐后获取了，这里忽略
+            }
+
+            if (!parsed.answers || !parsed.start || !parsed.log) {
+                throw new Error('解密数据缺少必要字段 (answers, start, log)');
+            }
+
+            return parsed;
+        }
+
+        // 解析日志字符串为事件数组
+        function parseLog(logStr, startTime) {
+            const entries = logStr.split(';').filter(e => e.length > 0);
+            const events = [];
+            for (let entry of entries) {
+                // 格式: 类型+索引+选项?@相对时间
+                const atIndex = entry.lastIndexOf('@');
+                if (atIndex === -1) continue;
+                const eventPart = entry.substring(0, atIndex);
+                const relTime = parseInt(entry.substring(atIndex + 1), 10);
+                if (isNaN(relTime)) continue;
+
+                // 解析 eventPart: 第一个字符是类型，后面是索引（可能还有选项）
+                const type = eventPart[0];
+                const rest = eventPart.substring(1);
+                // 分离索引和选项：索引可以是数字，可能包含负号，后面可能跟字母选项
+                let idxStr = '';
+                let option = null;
+                for (let i = 0; i < rest.length; i++) {
+                    const ch = rest[i];
+                    if (ch === '-' || (ch >= '0' && ch <= '9')) {
+                        idxStr += ch;
+                    } else {
+                        // 遇到字母，剩下的都是选项
+                        option = rest.substring(i);
+                        break;
+                    }
+                }
+                const idx = parseInt(idxStr, 10);
+                if (isNaN(idx)) continue;
+
+                const absTime = startTime + relTime;
+                events.push({
+                    type,
+                    idx,
+                    option,
+                    relTime,
+                    absTime
+                });
+            }
+            // 按相对时间排序
+            events.sort((a,b) => a.relTime - b.relTime);
+            return events;
+        }
+
+        // 格式化时间戳
+        function formatTimestamp(ts) {
+            const d = new Date(ts);
+            return d.toLocaleString('zh-CN', { hour12: false });
+        }
+
+        // 格式化相对时间 (毫秒 -> 秒)
+        function formatRelTime(ms) {
+            return (ms / 1000).toFixed(2) + 's';
+        }
+
+        // 事件类型转可读描述
+        function eventDescription(event) {
+            const type = event.type;
+            const idx = event.idx;
+            const opt = event.option;
+            if (type === 'S') return '开始答题';
+            if (type === 'E') return `进入第 ${idx} 题`;
+            if (type === 'L') return `第 ${idx} 题选择 ${opt}`;
+            if (type === 'U') return `提交 (最后一题)`;
+            return `未知事件 ${type}`;
+        }
+
+        // 主处理函数
+        function handleDecrypt() {
+            const cipher = cipherInput.value.trim();
+            const privateKey = privateKeyInput.value.trim();
+            const standardRaw = standardAnswerInput.value.trim();
+
+            if (!cipher || !privateKey || !standardRaw) {
+                alert('请完整填写密文、私钥和标准答案');
+                return;
+            }
+
+            try {
+                // 1. 分段解密
+                const decrypted = segmentDecrypt(cipher, privateKey);
+
+                // 2. 解析数据
+                const parsed = parseDecrypted(decrypted);
+                const { answers: answerSeq, start, submit, log } = parsed;
+
+                // 3. 解析日志
+                const events = parseLog(log, start);
+
+                // 4. 解析用户答案和标准答案
+                const userAnswers = answerSeq.split(/\s+/).filter(s => s.length > 0);
+                const standardAnswers = standardRaw.split(/\s+/).filter(s => s.length > 0);
+                const total = standardAnswers.length;
+
+                // 5. 对比
+                let correctCount = 0;
+                const compareDetails = [];
+                for (let i = 0; i < total; i++) {
+                    const user = i < userAnswers.length ? userAnswers[i] : '(缺失)';
+                    const std = standardAnswers[i];
+                    const isCorrect = (user === std);
+                    if (isCorrect) correctCount++;
+                    compareDetails.push({ index: i+1, user, std, isCorrect });
+                }
+                const accuracy = (correctCount / total * 100).toFixed(2);
+
+                // 6. 构建显示HTML
+                let html = '';
+
+                // 原始解密信息 (可选)
+                html += `<div class="result-section">
+                    <span class="badge">📜 解密原文</span>
+                    <div style="word-break:break-word; background:#0b141e; padding:12px; border-radius:12px; margin-top:12px; font-family: monospace; font-size:0.9rem;">${escapeHtml(decrypted)}</div>
+                </div>`;
+
+                // 时间信息
+                html += `<div class="result-section">
+                    <span class="badge">⏱️ 时间信息</span>
+                    <div style="margin-top:12px;">
+                        <div>开始答题：${formatTimestamp(start)} (${new Date(start).toLocaleString()})</div>
+                        <div>提交时间：${formatTimestamp(submit)} (${new Date(submit).toLocaleString()})</div>
+                        <div>总耗时：${((submit - start)/1000).toFixed(2)} 秒</div>
+                    </div>
+                </div>`;
+
+                // 用户答案序列
+                html += `<div class="result-section">
+                    <span class="badge">📋 用户答案</span>
+                    <div style="font-size:1.8rem; font-weight:700; letter-spacing:4px; margin-top:12px;">${userAnswers.join(' ')}</div>
+                    ${userAnswers.length !== total ? `<div style="color: #ffb574;">⚠️ 用户答案数量 (${userAnswers.length}) 与标准答案数量 (${total}) 不一致，缺失部分视为错误。</div>` : ''}
+                </div>`;
+
+                // 行为轨迹
+                html += `<div class="result-section">
+                    <span class="badge">🚦 行为轨迹 (相对开始时间)</span>
+                    <div class="traffic-list">`;
+                events.forEach(e => {
+                    const desc = eventDescription(e);
+                    html += `<div class="traffic-item">${desc}  <span class="time-stamp">(${formatRelTime(e.relTime)})</span></div>`;
+                });
+                html += `</div></div>`;
+
+                // 逐题对比
+                html += `<div class="result-section">
+                    <span class="badge">🔎 逐题对比</span>
+                    <div style="margin-top:12px;">`;
+                compareDetails.forEach(item => {
+                    const status = item.isCorrect ? '✅' : '❌';
+                    const userDisplay = item.user === '(缺失)' ? '<span style="color:#ff8888">(缺失)</span>' : item.user;
+                    html += `<div>${status} 第${item.index}题: 用户答案 <strong>${userDisplay}</strong> | 标准答案 <strong>${item.std}</strong> ${item.isCorrect ? '<span class="correct">✓</span>' : '<span class="incorrect">✗</span>'}</div>`;
+                });
+                html += `</div></div>`;
+
+                // 正确率
+                html += `<div style="background: #0f1a24; border-radius: 28px; padding: 20px; text-align: center; border: 2px solid #3b6eff;">
+                    <span style="font-size: 1.4rem;">🎯 正确率 </span>
+                    <span style="font-size: 3rem; font-weight: 800; color: ${accuracy >= 60 ? '#a3e0a3' : '#ffa3a3'};">${accuracy}%</span>
+                    <span style="display: block; margin-top: 8px;">(${correctCount} / ${total} 题正确)</span>
+                </div>`;
+
+                resultContent.innerHTML = html;
+                resultArea.style.display = 'block';
+                resultArea.scrollIntoView({ behavior: 'smooth' });
+
+            } catch (e) {
+                alert('解密失败：' + e.message);
+                console.error(e);
+            }
+        }
+
+        // 简单转义
+        function escapeHtml(unsafe) {
+            return unsafe.replace(/[&<>"]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                if (m === '"') return '&quot;';
+                return m;
+            });
+        }
+
+        decryptBtn.addEventListener('click', handleDecrypt);
+    })();
+</script>
+</body>
+</html>

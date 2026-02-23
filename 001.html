@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes"
+        />
+        <title>📋 答题挑战 · 提交后只显密文</title>
+        <!-- 使用 jsencrypt 进行 RSA 加密（分段） -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.2/jsencrypt.min.js"></script>
+        <style>
+            * {
+                box-sizing: border-box;
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    "Segoe UI",
+                    Roboto,
+                    "Helvetica Neue",
+                    sans-serif;
+                margin: 0;
+                padding: 0;
+            }
+
+            body {
+                background: linear-gradient(145deg, #f0f4fa 0%, #e6ecf5 100%);
+                min-height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 16px;
+            }
+
+            .challenge-card {
+                max-width: 750px;
+                width: 100%;
+                background: rgba(255, 255, 255, 0.9);
+                backdrop-filter: blur(8px);
+                border-radius: 40px;
+                box-shadow: 0 20px 40px rgba(0, 10, 30, 0.2);
+                padding: 28px 24px;
+                border: 1px solid rgba(255, 255, 255, 0.7);
+            }
+
+            h1 {
+                font-size: 2rem;
+                font-weight: 700;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: #1e2b3c;
+                margin-bottom: 20px;
+                border-left: 6px solid #3b6eff;
+                padding-left: 20px;
+            }
+
+            h1 span {
+                background: #1e2b3c;
+                color: white;
+                font-size: 1rem;
+                padding: 4px 12px;
+                border-radius: 60px;
+            }
+
+            /* 题号 & 导航 */
+            .progress-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+
+            .badge {
+                background: #1e2b3c;
+                color: white;
+                padding: 8px 18px;
+                border-radius: 60px;
+                font-weight: 500;
+                font-size: 1.1rem;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+                min-width: 80px;
+                text-align: center;
+            }
+
+            .nav-buttons {
+                display: flex;
+                gap: 12px;
+            }
+
+            .nav-btn {
+                background: white;
+                border: none;
+                padding: 10px 24px;
+                border-radius: 60px;
+                font-weight: 600;
+                font-size: 1rem;
+                color: #1e2b3c;
+                box-shadow: 0 6px 14px rgba(59, 110, 255, 0.15);
+                cursor: pointer;
+                transition: all 0.15s;
+                border: 1px solid rgba(255, 255, 255, 0.7);
+            }
+
+            .nav-btn:not(:disabled):hover {
+                background: #f0f4ff;
+                transform: scale(1.02);
+                border-color: #3b6eff;
+            }
+
+            .nav-btn:disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+                background: #eef2f7;
+            }
+
+            .submit-btn {
+                background: #3b6eff !important;
+                color: white !important;
+                border-color: #8bb1ff !important;
+            }
+
+            /* 题目卡片 */
+            .question-box {
+                background: white;
+                border-radius: 28px;
+                padding: 28px 24px;
+                margin-bottom: 24px;
+                box-shadow:
+                    inset 0 1px 3px rgba(0, 0, 0, 0.02),
+                    0 10px 25px rgba(0, 20, 50, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.8);
+            }
+
+            .question-text {
+                font-size: 1.7rem;
+                font-weight: 700;
+                color: #0b1a2a;
+                margin-bottom: 32px;
+                word-break: break-word;
+            }
+
+            .options {
+                display: flex;
+                flex-direction: column;
+                gap: 14px;
+            }
+
+            .options label {
+                display: flex;
+                align-items: center;
+                padding: 16px 22px;
+                background: #f8fafd;
+                border-radius: 60px;
+                font-size: 1.25rem;
+                font-weight: 500;
+                color: #1e2b3c;
+                border: 2px solid transparent;
+                transition: 0.15s;
+                cursor: pointer;
+            }
+
+            .options label:hover {
+                background: #e9effa;
+                border-color: #a0bbff;
+            }
+
+            .options input[type="radio"] {
+                appearance: none;
+                width: 24px;
+                height: 24px;
+                border: 2px solid #9aa9b9;
+                border-radius: 50%;
+                margin-right: 20px;
+                background: white;
+            }
+
+            .options input[type="radio"]:checked {
+                border-color: #3b6eff;
+                background-color: #3b6eff;
+                box-shadow: inset 0 0 0 5px white;
+            }
+
+            /* 密文卡片 (初始隐藏) */
+            .cipher-card {
+                background: #1e2b3c;
+                border-radius: 28px;
+                padding: 28px 24px;
+                margin-top: 10px;
+                color: #edf2f9;
+                display: none;
+                border: 2px solid #5d8aff;
+            }
+
+            .cipher-title {
+                font-size: 1.5rem;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 20px;
+            }
+
+            .cipher-textarea {
+                width: 100%;
+                background: #0f1a24;
+                border: 2px solid #314b62;
+                border-radius: 20px;
+                padding: 18px;
+                font-size: 1.2rem;
+                line-height: 1.5;
+                color: #dbe9ff;
+                resize: vertical;
+                font-family: "Fira Code", monospace;
+                outline: none;
+                margin-bottom: 20px;
+                word-break: break-all;
+            }
+
+            .copy-btn {
+                background: #3b6eff;
+                border: none;
+                padding: 14px 28px;
+                border-radius: 60px;
+                font-size: 1.2rem;
+                font-weight: 600;
+                color: white;
+                cursor: pointer;
+                transition: 0.15s;
+                border: 1px solid #8bb1ff;
+                width: 100%;
+            }
+
+            .copy-btn:hover {
+                background: #2952d0;
+            }
+
+            .footer-note {
+                text-align: center;
+                margin-top: 16px;
+                color: #536e82;
+                font-size: 0.95rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="challenge-card" role="main">
+            <h1>
+                默契局
+                <span>身外青山</span>
+            </h1>
+
+            <!-- 答题区域 (包含进度、题目、导航) 提交后将隐藏 -->
+            <div id="quizArea">
+                <!-- 进度 + 导航（下一题按钮会变提交） -->
+                <div class="progress-row">
+                    <div class="badge" id="questionIndexDisplay"></div>
+                    <!-- 初始留空，由JS动态填充 -->
+                    <div class="nav-buttons">
+                        <button class="nav-btn" id="prevBtn" disabled>
+                            ← 上一题
+                        </button>
+                        <button class="nav-btn" id="nextBtn">下一题 →</button>
+                    </div>
+                </div>
+
+                <!-- 题目卡片 -->
+                <div class="question-box">
+                    <div class="question-text" id="questionText">加载中...</div>
+                    <div class="options" id="optionsContainer"></div>
+                </div>
+            </div>
+
+            <!-- 密文卡片 (初始隐藏) -->
+            <div class="cipher-card" id="cipherCard">
+                <div class="cipher-title">
+                    <span>🔒 你的密文 (可复制)</span>
+                </div>
+                <textarea
+                    id="cipherText"
+                    class="cipher-textarea"
+                    rows="4"
+                    readonly
+                    placeholder="加密后的密文将显示在这里..."
+                ></textarea>
+                <button class="copy-btn" id="copyCipherBtn">
+                    📋 复制密文到剪贴板
+                </button>
+                <div class="footer-note">
+                    将该密文（通常不会长到无法发送），发送给题主，题主也许会告诉你作答情况
+                </div>
+            </div>
+
+            <div class="footer-note" style="margin-top: 16px">
+                <p>⚡为什么不用小程序？因为都有现成的办法获得答案。</p>
+                <p>例子详情见https://github.com/NULL11034/moqijuansview</p>
+            </div>
+        </div>
+
+        <script>
+            (function () {
+                // ---------- 题库 (支持最多10个选项) ----------
+                const questions = [
+                    {
+                        question: "我的q区王者账号名字是",
+                        options: [
+                            "身外青山",
+                            "不要肘狗",
+                            "堕日皎月",
+                            "地心引力",
+                        ],
+                    },
+                    {
+                        question: "以下思想中，我最喜欢哪一个",
+                        options: ["墨家", "道家", "阴阳家", "马克思主义"],
+                    },
+                    {
+                        question: "我在初中毕业时拥有几个朋友",
+                        options: ["1", "2", "3", "4", "5", "6"],
+                    },
+                    {
+                        question: "以下歌曲中，我会最喜欢哪个（随便找的）",
+                        options: [
+                            "《海月吟》",
+                            "《盗墓笔记·十年人间》",
+                            "《黑夜问白天》",
+                            "《一首想不通的古风》",
+                        ],
+                    },
+                    {
+                        question: "我使用时间最长的代码编辑器是",
+                        options: [
+                            "vim",
+                            "emacs",
+                            "neovim",
+                            "zed",
+                            "vscode",
+                            "JB全家桶",
+                            "VS",
+                        ],
+                    },
+                    {
+                        question: "我对一个人的判断侧重于",
+                        options: ["外貌", "性格", "灵魂", "直觉"],
+                    },
+                    {
+                        question: "下列作品中，我最喜欢的是",
+                        options: [
+                            "《盗墓笔记》",
+                            "《全职猎人》",
+                            "《全职高手》",
+                            "《十日终焉》",
+                            "《诡秘之主》",
+                            "我以上都没看过/不喜欢",
+                        ],
+                    },
+                    {
+                        question: "下列颜色中，我最喜欢",
+                        options: [
+                            "浅紫色",
+                            "深紫色",
+                            "群青色",
+                            "克莱因蓝",
+                            "普鲁士蓝(bushi)",
+                        ],
+                    },
+                    {
+                        question: "下列句子中，我会更喜欢的是（同样随便找的）",
+                        options: [
+                            "你说人生是旷野 我却困在黑夜",
+                            "抓了两把月光 埋在十五六岁年纪",
+                            "你说把爱渐渐放下会 走更远",
+                            "别再互相折磨 因为我们都有错",
+                        ],
+                    },
+                    {
+                        question: "下列句子中，哪句更接近我的风格",
+                        options: [
+                            "记忆像一只病弱的蝴蝶，枯死在那年夏天",
+                            "愿你的“幸好”，多于“若当初”",
+                            "拜托你都看到这里啦，有点耐心好不好喂",
+                            "我可能会问他要不要加眼泪，也可能在说这句话的时候眼泪就不争气地流下来",
+                        ],
+                    },
+                ];
+
+                // ---------- 用户提供的 RSA 公钥 (PEM格式) ----------
+                const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+            MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjNXo1pEDEgmAs3hyfyYx
+            9kYiAfEnGezC8GMqp7/I6ZQ/EODLF6yUIs9ceStq28AF/ETMkDlk54krxWTjageB
+            BJI1UpxBSWVd0J1nu1leVmg5HBtNGQnzE7Bl0jt8IbtwJpQEn1lsug147Nd4DEIT
+            npmNXh0z53h3kSDgW64/BxIyhdf/4tAwbvF8gW4rnehKzpVYdMe2+mAqXMUJUZ87
+            /FFAB0mykFfTMKTbejUc5OjkRx61fJ+sGmmK/+efGS8L3ZvvvWLTMHVKgV2ehjeN
+            m6fH9E8Xn97nqVJsLNr7mcXulib/RPKSOM//nUuL3xyULDWzjT2uc/sbHS2YsdG4
+            yQIDAQAB
+            -----END PUBLIC KEY-----`;
+
+                // ---------- 固定盐值 (按要求) ----------
+                const FIXED_SALT = "#@SALT_DOGEATMOON@#";
+
+                // ---------- 分段加密配置 ----------
+                const MAX_SEGMENT_LENGTH = 100; // 每段明文字符数
+                const SEGMENT_DELIMITER = "||"; // 分段分隔符
+
+                // ---------- 状态 ----------
+                const totalQuestions = questions.length;
+                let currentIndex = 0;
+                // 初始化答案全部为 'A'
+                let answers = questions.map(() => "A");
+
+                // 记录开始时间 (页面加载时)
+                const startTime = Date.now();
+
+                // 行为日志数组 (存储紧凑格式字符串片段)
+                let behaviorLog = [];
+
+                // DOM 元素
+                const quizArea = document.getElementById("quizArea");
+                const questionTextEl = document.getElementById("questionText");
+                const optionsContainer =
+                    document.getElementById("optionsContainer");
+                const questionIndexEl = document.getElementById(
+                    "questionIndexDisplay",
+                );
+                const prevBtn = document.getElementById("prevBtn");
+                const nextBtn = document.getElementById("nextBtn");
+                const cipherCard = document.getElementById("cipherCard");
+                const cipherText = document.getElementById("cipherText");
+                const copyCipherBtn = document.getElementById("copyCipherBtn");
+
+                // ---------- 辅助函数 ----------
+                // 记录日志 (类型: S=start, E=enter, L=select, U=submit)
+                // 类型用单个大写字母，后跟题目索引(1-based)，选项(仅select)
+                function logEvent(type, qIndex, option = null) {
+                    const relativeTime = Date.now() - startTime; // 毫秒
+                    // 将题目索引转换为1-based (但保留-1为全局)
+                    const displayIndex = qIndex === -1 ? -1 : qIndex + 1;
+                    let entry = type + displayIndex; // 例如 "E1"
+                    if (option !== null) {
+                        entry += option; // 例如 "L1A"
+                    }
+                    entry += "@" + relativeTime;
+                    behaviorLog.push(entry);
+                    console.log("LOG:", entry);
+                }
+
+                // 检查当前题目的答案是否有效
+                function validateAnswerForCurrent() {
+                    const optCount = questions[currentIndex].options.length;
+                    const currentLetter = answers[currentIndex];
+                    const letterIndex = currentLetter.charCodeAt(0) - 65;
+                    if (letterIndex >= optCount) {
+                        answers[currentIndex] = "A";
+                    }
+                }
+
+                // 渲染当前题目
+                function renderCurrentQuestion() {
+                    validateAnswerForCurrent();
+
+                    const q = questions[currentIndex];
+                    questionTextEl.innerText = q.question;
+
+                    // 生成选项
+                    let htmlStr = "";
+                    q.options.forEach((opt, idx) => {
+                        const letter = String.fromCharCode(65 + idx);
+                        const checked =
+                            answers[currentIndex] === letter ? "checked" : "";
+                        htmlStr += `<label><input type="radio" name="option" value="${letter}" ${checked}> ${opt}</label>`;
+                    });
+                    optionsContainer.innerHTML = htmlStr;
+
+                    // 更新题号 (动态，无硬编码)
+                    questionIndexEl.innerText = `${currentIndex + 1} / ${totalQuestions}`;
+
+                    // 导航按钮状态
+                    prevBtn.disabled = currentIndex === 0;
+                    // 下一题按钮：如果是最后一题，变成“提交”，否则为“下一题”
+                    if (currentIndex === totalQuestions - 1) {
+                        nextBtn.innerText = "📮 提交";
+                        nextBtn.classList.add("submit-btn");
+                    } else {
+                        nextBtn.innerText = "下一题 →";
+                        nextBtn.classList.remove("submit-btn");
+                        nextBtn.disabled = false;
+                    }
+
+                    // 记录进入题目事件
+                    logEvent("E", currentIndex);
+                }
+
+                // 处理选项变化
+                function handleOptionChange(e) {
+                    if (
+                        e.target.tagName === "INPUT" &&
+                        e.target.type === "radio"
+                    ) {
+                        const selectedLetter = e.target.value;
+                        if (answers[currentIndex] !== selectedLetter) {
+                            answers[currentIndex] = selectedLetter;
+                            logEvent("L", currentIndex, selectedLetter);
+                        }
+                    }
+                }
+
+                // 切换题目 (上一题)
+                function goPrev() {
+                    if (currentIndex > 0) {
+                        currentIndex--;
+                        renderCurrentQuestion();
+                    }
+                }
+
+                // 下一题或提交
+                function handleNextOrSubmit() {
+                    if (currentIndex === totalQuestions - 1) {
+                        // 提交操作
+                        handleEncrypt();
+                    } else {
+                        // 正常下一题
+                        if (currentIndex < totalQuestions - 1) {
+                            currentIndex++;
+                            renderCurrentQuestion();
+                        }
+                    }
+                }
+
+                // 分段加密函数
+                function segmentEncrypt(plainText, publicKey) {
+                    const encryptor = new JSEncrypt();
+                    encryptor.setPublicKey(publicKey);
+
+                    const segments = [];
+                    for (
+                        let i = 0;
+                        i < plainText.length;
+                        i += MAX_SEGMENT_LENGTH
+                    ) {
+                        const segment = plainText.substr(i, MAX_SEGMENT_LENGTH);
+                        const encrypted = encryptor.encrypt(segment);
+                        if (encrypted === false) {
+                            throw new Error(
+                                `加密失败 at segment starting at ${i}`,
+                            );
+                        }
+                        segments.push(encrypted);
+                    }
+                    return segments.join(SEGMENT_DELIMITER);
+                }
+
+                // 加密函数 (提交后隐藏答题区域，只显示密文)
+                async function handleEncrypt() {
+                    // 记录提交事件
+                    logEvent("U", currentIndex); // U=submit
+
+                    const submitTime = Date.now();
+
+                    // 构建紧凑格式字符串 (已移除IP字段)
+                    const answersStr = answers.join(" ");
+                    const logStr = behaviorLog.join(";");
+                    const plainData = `answers:${answersStr}|start:${startTime}|submit:${submitTime}|log:${logStr}`;
+
+                    // 加盐
+                    const plainWithSalt = plainData + FIXED_SALT + submitTime;
+
+                    // 加密
+                    if (!PUBLIC_KEY) {
+                        alert(
+                            "错误：未设置RSA公钥。请先在代码中填入您的公钥。",
+                        );
+                        return;
+                    }
+
+                    try {
+                        const encrypted = segmentEncrypt(
+                            plainWithSalt,
+                            PUBLIC_KEY,
+                        );
+
+                        // 隐藏答题区域
+                        quizArea.style.display = "none";
+
+                        // 显示密文卡片
+                        cipherText.value = encrypted;
+                        cipherCard.style.display = "block";
+                        cipherCard.scrollIntoView({
+                            behavior: "smooth",
+                            block: "nearest",
+                        });
+                    } catch (e) {
+                        alert("加密失败：" + e.message);
+                    }
+                }
+
+                // 复制密文
+                async function copyCipher() {
+                    const text = cipherText.value;
+                    if (!text) {
+                        alert("没有可复制的密文");
+                        return;
+                    }
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        const original = copyCipherBtn.innerText;
+                        copyCipherBtn.innerText = "✅ 已复制！";
+                        setTimeout(() => {
+                            copyCipherBtn.innerText = original;
+                        }, 1500);
+                    } catch (err) {
+                        alert("复制失败，请手动复制");
+                    }
+                }
+
+                // ---------- 事件绑定 ----------
+                optionsContainer.addEventListener("change", handleOptionChange);
+
+                prevBtn.addEventListener("click", goPrev);
+                nextBtn.addEventListener("click", handleNextOrSubmit);
+
+                copyCipherBtn.addEventListener("click", copyCipher);
+
+                // 初始化渲染
+                renderCurrentQuestion();
+
+                // 记录开始事件 (全局开始)
+                logEvent("S", -1);
+            })();
+        </script>
+    </body>
+</html>
