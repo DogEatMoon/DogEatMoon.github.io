@@ -6,7 +6,7 @@
             name="viewport"
             content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes"
         />
-        <title>📋 答题挑战 · 提交后只显密文</title>
+        <title>📋 默契局</title>
         <!-- 使用 jsencrypt 进行 RSA 加密（分段） -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.2/jsencrypt.min.js"></script>
         <style>
@@ -175,6 +175,7 @@
                 border-radius: 50%;
                 margin-right: 20px;
                 background: white;
+                flex-shrink: 0; /* 防止在多行文字时被压缩变形 */
             }
 
             .options input[type="radio"]:checked {
@@ -249,7 +250,7 @@
         <div class="challenge-card" role="main">
             <h1>
                 默契局
-                <span>身外青山</span>
+                <span>身外青山创建</span>
             </h1>
 
             <!-- 答题区域 (包含进度、题目、导航) 提交后将隐藏 -->
